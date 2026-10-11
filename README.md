@@ -1,12 +1,12 @@
-# Yuntra
+# yuntra
 
 **Remember. Plan. Execute. Learn.**
 
-Yuntra is a local-first, provider-neutral framework for AI-assisted software development. It keeps a user-approved plan, structured project memory, decisions, verification evidence, recovery checkpoints, and tool handoffs in centralized local storage—without automatically committing, pushing, publishing, or discarding repository work.
+yuntra is a local-first, provider-neutral framework for AI-assisted software development. It keeps a user-approved plan, structured project memory, decisions, verification evidence, recovery checkpoints, and tool handoffs in centralized local storage—without automatically committing, pushing, publishing, or discarding repository work.
 
 ## What exists now
 
-Yuntra is an installable Python CLI for Windows and PowerShell. It runs without an external LLM API, Docker, Redis, a vector database, or a background service.
+yuntra is an installable Python CLI for Windows and PowerShell. It runs without an external LLM API, Docker, Redis, a vector database, or a background service.
 
 | Phase | Delivered capability | Current status |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Yuntra is an installable Python CLI for Windows and PowerShell. It runs without 
 
 The complete local quality gate currently covers 23 automated tests, Ruff linting, Black formatting, Mypy type checks, compilation, and source/wheel builds.
 
-Yuntra is prepared for a public beta, but this repository has not been published, released, or tagged by Yuntra. See the [roadmap](docs/roadmap.md) and [known limitations](docs/known-limitations.md) before opening it to contributors.
+yuntra is prepared for a public beta, but this repository has not been published, released, or tagged by yuntra. See the [roadmap](docs/roadmap.md) and [known limitations](docs/known-limitations.md) before opening it to contributors.
 
 ## Installation on Windows / PowerShell
 
@@ -31,14 +31,14 @@ py -m pip install -e .
 yuntra init
 ```
 
-Yuntra stores canonical state centrally in `%LOCALAPPDATA%\Yuntra` by default. To select another user-controlled location:
+yuntra stores canonical state centrally in `%LOCALAPPDATA%\yuntra` by default. To select another user-controlled location:
 
 ```powershell
-$env:YUNTRA_HOME = "D:\YuntraData"
+$env:YUNTRA_HOME = "D:\yuntraData"
 yuntra init
 ```
 
-The framework references source repositories; it does not put Yuntra state into them by default.
+The framework references source repositories; it does not put yuntra state into them by default.
 
 ## Start-to-finish workflow
 
@@ -71,7 +71,7 @@ yuntra adapter codex instructions inventory-api --output C:\handoffs\inventory-c
 yuntra adapter codex run inventory-api --prompt "Implement the approved authentication milestone" --yes
 ```
 
-The adapter creates a handoff from canonical Yuntra state, records bounded/redacted adapter output, compares Git state before and after, and saves a checkpoint. It does not commit or push.
+The adapter creates a handoff from canonical yuntra state, records bounded/redacted adapter output, compares Git state before and after, and saves a checkpoint. It does not commit or push.
 
 For Claude Code or Google Antigravity, first check availability and export a manual handoff:
 
@@ -82,7 +82,7 @@ yuntra adapter antigravity health
 yuntra adapter antigravity instructions inventory-api --output C:\handoffs\inventory-antigravity.md
 ```
 
-Copy the generated handoff into a manually started provider session. Yuntra will not claim unsupported hooks, edit interception, or token tracking.
+Copy the generated handoff into a manually started provider session. yuntra will not claim unsupported hooks, edit interception, or token tracking.
 
 ### 4. Track decisions, verify, and recover
 
@@ -136,10 +136,10 @@ Restore only writes into a new destination and rejects unsafe archive paths. Che
 
 ## Safety boundaries and limitations
 
-- Yuntra never auto-commits or pushes. These defaults are disabled in every project profile.
+- yuntra never auto-commits or pushes. These defaults are disabled in every project profile.
 - High-risk project policies default to deny: dependency installation, network access, destructive operations, auto-commit, and push.
-- Common inline credential assignments are redacted before Yuntra persists operational metadata; project plans with likely credentials are blocked from approval.
-- Codex integration is limited to documented CLI capabilities. It cannot guarantee interception of every edit or accurate provider token usage.
+- Common inline credential assignments are redacted before yuntra persists operational metadata; project plans with likely credentials are blocked from approval.
+- Codex integration is limited to documented CLI capabilities. It cannot guarantee interception of every edit or accurate use of provider tokens.
 - Claude Code and Antigravity are manual-fallback adapters until their installed CLIs and stable integration interfaces are verified.
 - Semantic retrieval, embeddings, and hosted memory are deliberately not enabled.
 
