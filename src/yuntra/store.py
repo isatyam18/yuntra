@@ -25,16 +25,14 @@ class Store:
 
     def _init(self) -> None:
         with self._connect() as con:
-            con.executescript(
-                """
+            con.executescript("""
                 PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS schema_meta (version INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS profiles (project_id TEXT PRIMARY KEY, body TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, body TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS decisions (decision_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, created_at TEXT NOT NULL, body TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS verification (verification_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, created_at TEXT NOT NULL, body TEXT NOT NULL);
-            """
-            )
+            """)
             row = con.execute("SELECT version FROM schema_meta LIMIT 1").fetchone()
             if row is None:
                 con.execute(
