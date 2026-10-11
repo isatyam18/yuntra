@@ -6,9 +6,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .base import AdapterError, CodingAdapter
 from ..models import LifecycleState
 from ..service import ProjectService, git_status, redact
+from .base import AdapterError, CodingAdapter
 
 
 class CodexAdapter(CodingAdapter):

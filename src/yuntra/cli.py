@@ -11,6 +11,14 @@ from typing import Annotated
 
 import typer
 
+from .adapters.antigravity import AntigravityAdapter
+from .adapters.base import AdapterError
+from .adapters.claude_code import ClaudeCodeAdapter
+from .adapters.codex import CodexAdapter
+from .control.learning import LearningRegistry
+from .core.governance import PolicyViolation, require_policy
+from .dashboard import render_dashboard
+from .memory.context import benchmark_context, build_context
 from .models import (
     DecisionRecord,
     LearningScope,
@@ -26,14 +34,6 @@ from .service import (
     redact,
     restore_backup,
 )
-from .core.governance import require_policy, PolicyViolation
-from .adapters.codex import CodexAdapter
-from .adapters.base import AdapterError
-from .memory.context import benchmark_context, build_context
-from .control.learning import LearningRegistry
-from .dashboard import render_dashboard
-from .adapters.claude_code import ClaudeCodeAdapter
-from .adapters.antigravity import AntigravityAdapter
 
 app = typer.Typer(help="Yuntra: remember, plan, execute, learn.", no_args_is_help=True)
 project_app = typer.Typer(help="Create and inspect centralized project profiles.")

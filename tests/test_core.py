@@ -1,21 +1,19 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from yuntra.models import LifecycleState
-from yuntra.service import ProjectService, redact
-from yuntra.adapters.codex import CodexAdapter
-from yuntra.adapters.claude_code import ClaudeCodeAdapter
 from yuntra.adapters.antigravity import AntigravityAdapter
-from yuntra.memory.context import benchmark_context, build_context
+from yuntra.adapters.claude_code import ClaudeCodeAdapter
+from yuntra.adapters.codex import CodexAdapter
 from yuntra.control.learning import LearningRegistry
-from yuntra.models import LearningScope, LearningStatus
-from yuntra.store import Store
-from yuntra.service import backup, restore_backup
 from yuntra.core.governance import PolicyViolation, require_policy
 from yuntra.dashboard import render_dashboard
+from yuntra.memory.context import benchmark_context, build_context
+from yuntra.models import LearningScope, LearningStatus, LifecycleState
 from yuntra.security import redact_payload
+from yuntra.service import ProjectService, backup, redact, restore_backup
+from yuntra.store import Store
 
 
 @pytest.fixture()
@@ -92,7 +90,7 @@ def test_projects_are_isolated(tmp_path: Path):
 
 
 def test_safe_defaults_and_changelog(project):
-    service, data, profile = project
+    _service, data, profile = project
     assert profile.policies["allow_auto_commit"] is False
     assert profile.policies["allow_git_push"] is False
     assert "PROJECT_CREATED" in (data / "CHANGELOG.md").read_text(encoding="utf-8")
@@ -160,7 +158,7 @@ def test_manual_adapters_export_canonical_handoff_and_refuse_runs(project, adapt
 
 
 def test_context_retrieval_excludes_secrets_and_reduces_duplicates(project):
-    service, data, profile = project
+    _service, data, profile = project
     repository = Path(profile.repository_path)
     (repository / "auth.md").write_text(
         "# Authentication\nUse explicit error handling.", encoding="utf-8"
@@ -228,7 +226,7 @@ def test_learning_deduplicates_and_does_not_leak_project_candidates(tmp_path: Pa
 
 
 def test_schema_version_and_existing_profile_survive_reopen(project):
-    service, data, profile = project
+    _service, data, profile = project
     assert Store(data).schema_version() == 1
     assert Store(data).profile(profile.project_id).name == "Demo"
 

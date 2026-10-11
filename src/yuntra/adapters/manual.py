@@ -5,8 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .base import AdapterError, CodingAdapter
 from ..service import ProjectService
+from .base import AdapterError, CodingAdapter
 
 
 class ManualCliAdapter(CodingAdapter):
