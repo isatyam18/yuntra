@@ -242,11 +242,11 @@ def benchmark_context(project_data: Path, query: str = "") -> dict:
         "baseline_estimated_tokens": baseline,
         "selected_estimated_tokens": selected_tokens,
         "estimated_reduction_tokens": max(0, baseline - selected_tokens),
-        "estimated_reduction_percent": round(
-            (max(0, baseline - selected_tokens) / baseline * 100), 2
-        )
-        if baseline
-        else 0,
+        "estimated_reduction_percent": (
+            round((max(0, baseline - selected_tokens) / baseline * 100), 2)
+            if baseline
+            else 0
+        ),
         "excluded_items": exclusions,
         "manifest": selected["manifest"],
     }
