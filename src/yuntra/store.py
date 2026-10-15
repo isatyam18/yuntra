@@ -126,3 +126,26 @@ class Store:
                     (project_id,),
                 )
             ]
+
+    def verification(self, body: dict[str, Any]) -> None:
+        body = redact_payload(body)
+        with self._connect() as con:
+            con.execute(
+                "INSERT INTO verification VALUES (?, ?, ?, ?)",
+                (
+                    body["verification_id"],
+                    body["project_id"],
+                    body["created_at"],
+                    json.dumps(body),
+                ),
+            )
+
+    def verifications(self, project_id: str) -> list[dict[str, Any]]:
+        with self._connect() as con:
+            return [
+                json.loads(row["body"])
+                for row in con.execute(
+                    "SELECT body FROM verification WHERE project_id=? ORDER BY created_at",
+                    (project_id,),
+                )
+            ]

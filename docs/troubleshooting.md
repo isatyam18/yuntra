@@ -20,7 +20,7 @@ Run `yuntra plan review <project>`. Complete every required section in `PROJECT_
 
 ## Codex, Claude Code, or Antigravity is unavailable
 
-Run `yuntra adapter list` and the adapter's `health` command. Yuntra remains usable without external tools: use project plans, decisions, verification, checkpoints, exports, and manual handoffs.
+Run `yuntra adapter list` and the adapter's `health` command. If the CLI is not installed, Yuntra remains usable: export a project handoff with the `instructions` command and paste it into a manually started provider session. Project plans, decisions, verification, checkpoints, and exports work without any external tool.
 
 ## Recovery reports repository drift
 

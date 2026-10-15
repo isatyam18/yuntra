@@ -42,8 +42,10 @@ context_app = typer.Typer(help="Inspect compact working context and context budg
 checkpoint_app = typer.Typer(help="Save recovery checkpoints.")
 adapter_app = typer.Typer(help="Inspect development-tool adapters.")
 codex_app = typer.Typer(help="Use the verified Codex CLI integration.")
-claude_app = typer.Typer(help="Generate safe manual Claude Code handoffs.")
-antigravity_app = typer.Typer(help="Generate safe manual Google Antigravity handoffs.")
+claude_app = typer.Typer(help="Use the verified Claude Code CLI integration.")
+antigravity_app = typer.Typer(
+    help="Use the verified Google Antigravity CLI integration."
+)
 skills_app = typer.Typer(help="Inspect the local skill registry.")
 app.add_typer(project_app, name="project")
 app.add_typer(plan_app, name="plan")
@@ -352,16 +354,7 @@ def verify(
         "output": redact((result.stdout + result.stderr)[-8000:]),
         "created_at": utc_now(),
     }
-    with store._connect() as con:
-        con.execute(
-            "INSERT INTO verification VALUES (?, ?, ?, ?)",
-            (
-                record["verification_id"],
-                profile.project_id,
-                record["created_at"],
-                json.dumps(record),
-            ),
-        )
+    store.verification(record)
     store.event(
         uuid.uuid4().hex,
         profile.project_id,
@@ -370,6 +363,29 @@ def verify(
     )
     typer.echo(json.dumps(record, indent=2))
     raise typer.Exit(0 if result.returncode == 0 else 1)
+
+
+def _export_instructions(adapter, project: str, output: Path | None) -> None:
+    text = adapter.export_project_instructions(data_path(project))
+    if output:
+        output.write_text(text, encoding="utf-8")
+        typer.echo(output.resolve())
+    else:
+        typer.echo(text)
+
+
+def _run_cli_adapter(
+    adapter, project: str, prompt: str, yes: bool, confirm_message: str
+) -> None:
+    if not yes and not typer.confirm(confirm_message):
+        raise typer.Abort()
+    try:
+        result = adapter.run_task(data_path(project), prompt)
+    except AdapterError as error:
+        raise typer.BadParameter(str(error)) from error
+    typer.echo(json.dumps(result, indent=2))
+    if result["exit_code"] != 0:
+        raise typer.Exit(result["exit_code"])
 
 
 @adapter_app.command("list")
@@ -390,8 +406,12 @@ def adapter_list() -> None:
 @adapter_app.command("doctor")
 def adapter_doctor() -> None:
     """Run harmless adapter availability checks."""
-    for tool in ("codex", "claude", "antigravity"):
-        typer.echo(f"{tool}: {shutil.which(tool) or 'not found'}")
+    for tool, executable in (
+        ("codex", "codex"),
+        ("claude-code", "claude"),
+        ("antigravity", "agy"),
+    ):
+        typer.echo(f"{tool}: {shutil.which(executable) or 'not found'}")
 
 
 @codex_app.command("instructions")
@@ -402,12 +422,7 @@ def codex_instructions(
     ),
 ) -> None:
     """Generate a compact Codex handoff from canonical Yuntra state."""
-    text = CodexAdapter().export_project_instructions(data_path(project))
-    if output:
-        output.write_text(text, encoding="utf-8")
-        typer.echo(output.resolve())
-    else:
-        typer.echo(text)
+    _export_instructions(CodexAdapter(), project, output)
 
 
 @codex_app.command("health")
@@ -427,38 +442,50 @@ def codex_run(
     ),
 ) -> None:
     """Launch a task through `codex exec` after an approved plan and confirmation."""
-    if not yes and not typer.confirm(
-        "Launch Codex with workspace-write access for this approved project?"
-    ):
-        raise typer.Abort()
-    try:
-        result = CodexAdapter().run_task(data_path(project), prompt)
-    except AdapterError as error:
-        raise typer.BadParameter(str(error)) from error
-    typer.echo(json.dumps(result, indent=2))
-    if result["exit_code"] != 0:
-        raise typer.Exit(result["exit_code"])
+    _run_cli_adapter(
+        CodexAdapter(),
+        project,
+        prompt,
+        yes,
+        "Launch Codex with workspace-write access for this approved project?",
+    )
 
 
-def _manual_instructions(adapter, project: str, output: Path | None) -> None:
-    text = adapter.export_project_instructions(data_path(project))
-    if output:
-        output.write_text(text, encoding="utf-8")
-        typer.echo(output.resolve())
-    else:
-        typer.echo(text)
+@codex_app.command("limitations")
+def codex_limitations() -> None:
+    typer.echo(json.dumps(CodexAdapter().report_limitations(), indent=2))
 
 
 @claude_app.command("instructions")
 def claude_instructions(project: str, output: Path | None = typer.Option(None)) -> None:
-    """Generate a manual Claude Code handoff from canonical Yuntra state."""
-    _manual_instructions(ClaudeCodeAdapter(), project, output)
+    """Generate a Claude Code handoff from canonical Yuntra state."""
+    _export_instructions(ClaudeCodeAdapter(), project, output)
 
 
 @claude_app.command("health")
 def claude_health() -> None:
     """Report Claude Code availability without starting a session."""
     typer.echo(json.dumps(ClaudeCodeAdapter().health_check(), indent=2))
+
+
+@claude_app.command("run")
+def claude_run(
+    project: str,
+    prompt: Annotated[str, typer.Option(...)],
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Explicitly authorize launching Claude Code for this approved project.",
+    ),
+) -> None:
+    """Launch a task through `claude -p` after an approved plan and confirmation."""
+    _run_cli_adapter(
+        ClaudeCodeAdapter(),
+        project,
+        prompt,
+        yes,
+        "Launch Claude Code for this approved project?",
+    )
 
 
 @claude_app.command("limitations")
@@ -470,14 +497,34 @@ def claude_limitations() -> None:
 def antigravity_instructions(
     project: str, output: Path | None = typer.Option(None)
 ) -> None:
-    """Generate a manual Google Antigravity handoff from canonical Yuntra state."""
-    _manual_instructions(AntigravityAdapter(), project, output)
+    """Generate a Google Antigravity handoff from canonical Yuntra state."""
+    _export_instructions(AntigravityAdapter(), project, output)
 
 
 @antigravity_app.command("health")
 def antigravity_health() -> None:
     """Report Google Antigravity availability without starting a session."""
     typer.echo(json.dumps(AntigravityAdapter().health_check(), indent=2))
+
+
+@antigravity_app.command("run")
+def antigravity_run(
+    project: str,
+    prompt: Annotated[str, typer.Option(...)],
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Explicitly authorize launching Antigravity for this approved project.",
+    ),
+) -> None:
+    """Launch a task through `agy` after an approved plan and confirmation."""
+    _run_cli_adapter(
+        AntigravityAdapter(),
+        project,
+        prompt,
+        yes,
+        "Launch Google Antigravity for this approved project?",
+    )
 
 
 @antigravity_app.command("limitations")

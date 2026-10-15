@@ -1,7 +1,6 @@
 # Known limitations
 
-- Codex is the only adapter with a verified automated CLI launch path. It still cannot intercept every edit or provide complete provider token accounting.
-- Claude Code and Google Antigravity adapters currently provide capability detection and manual handoffs only. Their executable interfaces were not available for local verification.
+- All three adapters (Codex, Claude Code, Google Antigravity) support automated CLI task launch, but none can intercept every edit or provide complete provider token accounting.
 - Context token counts are deterministic character-based estimates, not provider-reported measurements.
 - Context retrieval uses keywords and Markdown sections; semantic retrieval is intentionally out of scope.
 - The dashboard is a static local HTML export, not a multi-user service.

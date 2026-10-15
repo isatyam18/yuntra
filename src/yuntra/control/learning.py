@@ -27,13 +27,7 @@ class LearningRegistry:
 
     @staticmethod
     def _fingerprint(description: str, scope: LearningScope, applicability: str) -> str:
-        normalized = (
-            " ".join(description.lower().split())
-            + "|"
-            + str(scope)
-            + "|"
-            + " ".join(applicability.lower().split())
-        )
+        normalized = f"{' '.join(description.lower().split())}|{scope}|{' '.join(applicability.lower().split())}"
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
     def capture(
@@ -94,28 +88,22 @@ class LearningRegistry:
         with self._connect() as con:
             rows = con.execute("SELECT body FROM lessons").fetchall()
         lessons = [LearningRecord.model_validate_json(row["body"]) for row in rows]
-        if project_id is None:
-            lessons = [
-                lesson
-                for lesson in lessons
-                if lesson.scope == LearningScope.GLOBAL
+
+        def visible(lesson: LearningRecord) -> bool:
+            is_global_promoted = (
+                lesson.scope == LearningScope.GLOBAL
                 and lesson.status == LearningStatus.PROMOTED
-            ]
-        else:
-            lessons = [
-                lesson
-                for lesson in lessons
-                if lesson.project_id == project_id
-                or (
-                    lesson.scope == LearningScope.GLOBAL
-                    and lesson.status == LearningStatus.PROMOTED
-                )
-            ]
-        return [
-            lesson
-            for lesson in lessons
-            if not promoted_only or lesson.status == LearningStatus.PROMOTED
-        ]
+            )
+            matches_scope = (
+                is_global_promoted
+                if project_id is None
+                else (lesson.project_id == project_id or is_global_promoted)
+            )
+            return matches_scope and (
+                not promoted_only or lesson.status == LearningStatus.PROMOTED
+            )
+
+        return [lesson for lesson in lessons if visible(lesson)]
 
     def validate(self, lesson_id: str) -> LearningRecord:
         lesson = self.get(lesson_id)

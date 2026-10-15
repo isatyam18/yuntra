@@ -6,7 +6,6 @@
 - Validate installation from a built wheel in a clean environment.
 - Gather external feedback on onboarding, checkpoint recovery, and adapter behavior.
 - Publish reproducible context-retrieval benchmark inputs and results.
-- Verify provider interfaces before expanding automation.
 
 ## Next candidates
 

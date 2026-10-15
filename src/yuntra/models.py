@@ -70,7 +70,9 @@ class ProjectProfile(BaseModel):
     repository_path: str
     data_path: str
     state: LifecycleState = LifecycleState.NEW
-    allowed_adapters: list[str] = Field(default_factory=lambda: ["codex"])
+    allowed_adapters: list[str] = Field(
+        default_factory=lambda: ["codex", "claude-code", "antigravity"]
+    )
     context_exclusions: list[str] = Field(
         default_factory=lambda: [".git", ".env", "node_modules", ".venv"]
     )

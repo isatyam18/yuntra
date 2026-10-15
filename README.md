@@ -13,7 +13,7 @@ yuntra is an installable Python CLI for Windows and PowerShell. It runs without 
 | 0 | Repository/environment discovery and architecture plan | Complete |
 | 1 | Core project profiles, manual specification, approvals, lifecycle, SQLite events, decisions, verification, checkpoints, and recovery | Complete |
 | 2 | Codex CLI integration with canonical handoffs, direct Git evidence, and checkpoints | Complete |
-| 3 | Claude Code and Google Antigravity capability checks plus safe manual handoffs | Complete; neither CLI is installed in this environment |
+| 3 | Claude Code and Google Antigravity CLI integration with canonical handoffs, direct Git evidence, and checkpoints | Complete |
 | 4 | Deterministic context retrieval, exclusions, deduplication, budgets, manifests, and honest benchmarks | Complete |
 | 5 | Evidence-backed, scoped learning capture and explicit promotion gates | Complete |
 | 6 | Backup/restore safety, schema versioning, policy checks, recovery hardening, and security coverage | Complete |
@@ -63,7 +63,9 @@ Implementation-oriented work is blocked until the plan is approved.
 
 ### 3. Work with a coding tool
 
-Codex is the currently verified automated adapter:
+Each adapter creates a handoff from canonical yuntra state, records bounded/redacted adapter output, compares Git state before and after, and saves a checkpoint. None of them commit or push. If the CLI is not installed, export the handoff with the `instructions` command and paste it into a manually started provider session.
+
+Codex:
 
 ```powershell
 yuntra adapter codex health
@@ -71,18 +73,23 @@ yuntra adapter codex instructions inventory-api --output C:\handoffs\inventory-c
 yuntra adapter codex run inventory-api --prompt "Implement the approved authentication milestone" --yes
 ```
 
-The adapter creates a handoff from canonical yuntra state, records bounded/redacted adapter output, compares Git state before and after, and saves a checkpoint. It does not commit or push.
-
-For Claude Code or Google Antigravity, first check availability and export a manual handoff:
+Claude Code:
 
 ```powershell
 yuntra adapter claude-code health
 yuntra adapter claude-code instructions inventory-api --output C:\handoffs\inventory-claude.md
-yuntra adapter antigravity health
-yuntra adapter antigravity instructions inventory-api --output C:\handoffs\inventory-antigravity.md
+yuntra adapter claude-code run inventory-api --prompt "Implement the approved authentication milestone" --yes
 ```
 
-Copy the generated handoff into a manually started provider session. yuntra will not claim unsupported hooks, edit interception, or token tracking.
+Google Antigravity:
+
+```powershell
+yuntra adapter antigravity health
+yuntra adapter antigravity instructions inventory-api --output C:\handoffs\inventory-antigravity.md
+yuntra adapter antigravity run inventory-api --prompt "Implement the approved authentication milestone" --yes
+```
+
+
 
 ### 4. Track decisions, verify, and recover
 
@@ -139,8 +146,7 @@ Restore only writes into a new destination and rejects unsafe archive paths. Che
 - yuntra never auto-commits or pushes. These defaults are disabled in every project profile.
 - High-risk project policies default to deny: dependency installation, network access, destructive operations, auto-commit, and push.
 - Common inline credential assignments are redacted before yuntra persists operational metadata; project plans with likely credentials are blocked from approval.
-- Codex integration is limited to documented CLI capabilities. It cannot guarantee interception of every edit or accurate use of provider tokens.
-- Claude Code and Antigravity are manual-fallback adapters until their installed CLIs and stable integration interfaces are verified.
+- All three adapter integrations (Codex, Claude Code, Antigravity) are limited to documented CLI capabilities. They cannot guarantee interception of every edit or accurate use of provider tokens.
 - Semantic retrieval, embeddings, and hosted memory are deliberately not enabled.
 
 ## Useful commands
@@ -155,6 +161,6 @@ yuntra context show inventory-api
 yuntra skills list inventory-api
 ```
 
-See [architecture](docs/architecture.md), [adapter compatibility](docs/adapter-contract.md), [context optimization](docs/context-optimization.md), [learning](docs/learning.md), and [recovery/security](docs/recovery.md) for design details.
+See [architecture and design](docs/architecture.md) and [adapter compatibility](docs/adapter-contract.md) for technical details.
 
 For a short onboarding path, see the [five-minute quickstart](docs/quickstart.md). For setup and recovery issues, see [troubleshooting](docs/troubleshooting.md). Contributors should read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md).

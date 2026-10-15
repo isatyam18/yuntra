@@ -146,15 +146,66 @@ def test_codex_run_records_adapter_report(project, monkeypatch):
 
 
 @pytest.mark.parametrize("adapter", [ClaudeCodeAdapter(), AntigravityAdapter()])
-def test_manual_adapters_export_canonical_handoff_and_refuse_runs(project, adapter):
+def test_adapters_export_canonical_handoff(project, adapter):
     service, data, profile = project
     complete_spec(data)
     service.review(data)
     service.approve(data, "user")
-    assert profile.project_id in adapter.export_project_instructions(data)
-    assert adapter.detect_capabilities()["fallback"]
-    with pytest.raises(Exception, match="automation is not verified"):
-        adapter.run_task(data, "implement")
+    handoff = adapter.export_project_instructions(data)
+    assert profile.project_id in handoff
+    assert "Do not commit, push" in handoff
+    assert "User supplied content." in handoff
+    capabilities = adapter.detect_capabilities()
+    assert capabilities["name"] == adapter.name
+    assert "CLI health check" in capabilities["supported"]
+
+
+@pytest.mark.parametrize("adapter", [ClaudeCodeAdapter(), AntigravityAdapter()])
+def test_adapters_run_requires_approval(project, adapter, monkeypatch):
+    _, data, _ = project
+    executable_name = "claude" if adapter.name == "claude-code" else "agy"
+    module_path = f"yuntra.adapters.{'claude_code' if adapter.name == 'claude-code' else 'antigravity'}.shutil.which"
+    monkeypatch.setattr(module_path, lambda _: executable_name)
+    with pytest.raises(Exception, match="requires APPROVED"):
+        adapter.run_task(data, "do something")
+
+
+@pytest.mark.parametrize(
+    "adapter_cls,executable,module",
+    [
+        (ClaudeCodeAdapter, "claude", "yuntra.adapters.claude_code"),
+        (AntigravityAdapter, "agy", "yuntra.adapters.antigravity"),
+    ],
+)
+def test_adapters_run_records_adapter_report(
+    project, monkeypatch, adapter_cls, executable, module
+):
+    service, data, profile = project
+    complete_spec(data)
+    service.review(data)
+    service.approve(data, "user")
+    monkeypatch.setattr(f"{module}.shutil.which", lambda _: executable)
+    original_run = subprocess.run
+
+    def fake_run(command, *args, **kwargs):
+        if command[0] == executable:
+            return subprocess.CompletedProcess(command, 0, '{"type":"completed"}', "")
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(f"{module}.subprocess.run", fake_run)
+    adapter = adapter_cls()
+    result = adapter.run_task(data, "inspect implementation")
+    assert result["exit_code"] == 0
+    assert (
+        service.store(data).profile(profile.project_id).state
+        is LifecycleState.EXECUTING
+    )
+    handoff_name = f"{adapter.name}-handoff.md"
+    assert (data / handoff_name).exists()
+    assert any(
+        event["kind"] == "ADAPTER_RUN"
+        for event in service.store(data).events(profile.project_id)
+    )
 
 
 def test_context_retrieval_excludes_secrets_and_reduces_duplicates(project):
