@@ -19,9 +19,9 @@ yuntra is an installable Python CLI for Windows and PowerShell. It runs without 
 | 6 | Backup/restore safety, schema versioning, policy checks, recovery hardening, and security coverage | Complete |
 | 7 | Dependency-free static project dashboard | Complete |
 
-The complete local quality gate currently covers 23 automated tests, Ruff linting, Black formatting, Mypy type checks, compilation, and source/wheel builds.
+The complete local quality gate currently covers 27 automated tests, Ruff linting, Black formatting, Mypy type checks, compilation, and source/wheel builds.
 
-yuntra is prepared for a public beta, but this repository has not been published, released, or tagged by yuntra. See the [roadmap](docs/roadmap.md) and [known limitations](docs/known-limitations.md) before opening it to contributors.
+yuntra is prepared for a public beta, running locally on Windows and Linux without cloud accounts or external dependencies.
 
 ## Installation on Windows / PowerShell
 
@@ -161,6 +161,4 @@ yuntra context show inventory-api
 yuntra skills list inventory-api
 ```
 
-See [architecture and design](docs/architecture.md) and [adapter compatibility](docs/adapter-contract.md) for technical details.
-
-For a short onboarding path, see the [five-minute quickstart](docs/quickstart.md). For setup and recovery issues, see [troubleshooting](docs/troubleshooting.md). Contributors should read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md).
+For security policy and vulnerability reporting, see [SECURITY.md](SECURITY.md).

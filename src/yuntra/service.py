@@ -6,6 +6,7 @@ import subprocess
 import uuid
 import zipfile
 from pathlib import Path
+from typing import Any
 
 from .lifecycle import can_transition
 from .models import Checkpoint, LifecycleState, ProjectProfile, utc_now
@@ -144,6 +145,13 @@ class ProjectService:
             raise ValueError(
                 f"Plan must be in REVIEW, current state is {profile.state}"
             )
+        # Snapshot specification revision
+        spec_text = (data / "PROJECT_SPEC.md").read_text(encoding="utf-8")
+        revisions_dir = data / "revisions"
+        revisions_dir.mkdir(exist_ok=True)
+        rev_path = revisions_dir / f"spec-{utc_now().replace(':', '-')}.md"
+        rev_path.write_text(spec_text, encoding="utf-8")
+
         approved = self.transition(
             data, LifecycleState.APPROVED, "Plan explicitly approved", actor
         )
@@ -151,15 +159,23 @@ class ProjectService:
             uuid.uuid4().hex,
             approved.project_id,
             "APPROVAL",
-            {"actor": actor, "approval": "plan"},
+            {
+                "actor": actor,
+                "approval": "plan",
+                "reason": "Plan explicitly approved",
+                "revision": str(rev_path),
+            },
         )
         return approved
 
-    def save_checkpoint(self, data: Path, next_action: str) -> Path:
+    def save_checkpoint(
+        self, data: Path, next_action: str, reason: str | None = None
+    ) -> Path:
         profile = self.store(data).profile(self._project_id(data))
         checkpoint = Checkpoint(
             project_id=profile.project_id,
             lifecycle_state=profile.state,
+            reason=redact_text(reason) if reason else None,
             next_action=redact_text(next_action),
             git_status=git_status(Path(profile.repository_path)),
         )
@@ -173,9 +189,48 @@ class ProjectService:
             uuid.uuid4().hex,
             profile.project_id,
             "CHECKPOINT",
-            {"path": str(final), "next_action": next_action},
+            {
+                "path": str(final),
+                "next_action": next_action,
+                "reason": reason or next_action,
+            },
         )
         return final
+
+    def record_change(
+        self, data: Path, reason: str, actor: str = "user"
+    ) -> dict[str, Any]:
+        """Auto-log observed codebase changes with an explicit reason and save a checkpoint."""
+        profile = self.store(data).profile(self._project_id(data))
+        current_status = git_status(Path(profile.repository_path))
+        last_status = "Initial repository state"
+        try:
+            last_checkpoint, _ = self.resume(data)
+            last_status = last_checkpoint.git_status
+        except ValueError:
+            pass
+        change_record = {
+            "actor": actor,
+            "reason": redact_text(reason),
+            "summary": f"Changes recorded: {reason}",
+            "observed_before": last_status,
+            "observed_after": current_status,
+            "observed_directly": True,
+            "approval_state": profile.state,
+        }
+        self.store(data).event(
+            uuid.uuid4().hex,
+            profile.project_id,
+            "CHANGE_OBSERVED",
+            change_record,
+        )
+        checkpoint_path = self.save_checkpoint(
+            data,
+            f"Review recent changes: {reason}",
+            reason=reason,
+        )
+        change_record["checkpoint"] = str(checkpoint_path)
+        return change_record
 
     def resume(self, data: Path) -> tuple[Checkpoint, bool]:
         files = (

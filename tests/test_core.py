@@ -342,3 +342,29 @@ def test_review_rejects_sensitive_specification(project):
     )
     with pytest.raises(ValueError, match="sensitive values"):
         service.review(data)
+
+
+def test_record_change_auto_logs_with_reason(project):
+    service, data, profile = project
+    (Path(profile.repository_path) / "feature.py").write_text(
+        "print('feature')", encoding="utf-8"
+    )
+    record = service.record_change(data, "Implemented user authentication feature")
+    assert record["reason"] == "Implemented user authentication feature"
+    assert "feature.py" in record["observed_after"]
+    events = service.store(data).events(profile.project_id)
+    change_events = [e for e in events if e.get("kind") == "CHANGE_OBSERVED"]
+    assert len(change_events) >= 1
+    assert change_events[-1]["reason"] == "Implemented user authentication feature"
+    changelog = (data / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "CHANGE_OBSERVED: Implemented user authentication feature" in changelog
+
+
+def test_plan_approval_records_revision_snapshot(project):
+    service, data, _ = project
+    complete_spec(data)
+    service.review(data)
+    service.approve(data, "user")
+    revisions = list((data / "revisions").glob("spec-*.md"))
+    assert len(revisions) == 1
+    assert "User supplied content." in revisions[0].read_text(encoding="utf-8")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -178,12 +180,19 @@ Follow the approved specification below. Do not commit, push, publish, install d
         }
         store.event(uuid.uuid4().hex, profile.project_id, "ADAPTER_RUN", event)
         if before != after:
+            ai_rationale = self._extract_ai_rationale(output)
+            reason_msg = f"Task: {prompt}" + (
+                f" ({ai_rationale})" if ai_rationale else ""
+            )
             store.event(
                 uuid.uuid4().hex,
                 profile.project_id,
                 "CHANGE_OBSERVED",
                 {
                     "adapter": self.name,
+                    "task_prompt": prompt,
+                    "reason": reason_msg,
+                    "ai_rationale": ai_rationale,
                     "summary": f"Repository state changed during {self.display_name} task",
                     "before": before,
                     "after": after,
@@ -194,5 +203,28 @@ Follow the approved specification below. Do not commit, push, publish, install d
         service.save_checkpoint(
             project_data,
             f"Review {self.display_name} output and run the required verification commands.",
+            reason=f"{self.display_name}: {prompt}",
         )
         return event
+
+    @staticmethod
+    def _extract_ai_rationale(output: str) -> str | None:
+        if not output:
+            return None
+        try:
+            data = json.loads(output.strip())
+            if isinstance(data, dict):
+                for key in ("summary", "reason", "message", "explanation", "result"):
+                    val = data.get(key)
+                    if isinstance(val, str) and val.strip():
+                        return val.strip()
+        except (json.JSONDecodeError, ValueError, TypeError):
+            data = None
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        for line in lines:
+            match = re.match(
+                r"(?i)^(reason|summary|rationale|explanation)\s*[:=-]\s*(.+)", line
+            )
+            if match:
+                return match.group(2).strip()
+        return lines[-1][:200] if lines else None

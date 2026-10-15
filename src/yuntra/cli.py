@@ -258,10 +258,33 @@ def context_benchmark(
 
 @checkpoint_app.command("save")
 def checkpoint_save(
-    project: str, next_action: Annotated[str, typer.Option(prompt=True)]
+    project: str,
+    next_action: Annotated[str, typer.Option(prompt=True)],
+    reason: str | None = typer.Option(
+        None, "--reason", "-r", help="Reason or explanation for the changes made."
+    ),
 ) -> None:
-    """Atomically save a checkpoint containing direct Git evidence."""
-    typer.echo(ProjectService(home()).save_checkpoint(data_path(project), next_action))
+    """Atomically save a checkpoint containing direct Git evidence and optional reason."""
+    path = ProjectService(home()).save_checkpoint(
+        data_path(project), next_action, reason=reason
+    )
+    typer.echo(path.resolve())
+
+
+@app.command("record-change")
+def record_change(
+    project: str,
+    reason: Annotated[
+        str,
+        typer.Option(
+            prompt=True, help="Reason or explanation for the codebase change."
+        ),
+    ],
+) -> None:
+    """Auto-log observed repository changes with an explicit reason and save a checkpoint."""
+    data = data_path(project)
+    change_record = ProjectService(home()).record_change(data, reason)
+    typer.echo(json.dumps(change_record, indent=2))
 
 
 @app.command()

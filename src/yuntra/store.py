@@ -91,8 +91,15 @@ class Store:
             )
         with (self.data_dir / "events.jsonl").open("a", encoding="utf-8") as output:
             output.write(json.dumps(record) + "\n")
+        reason_text = (
+            record.get("reason")
+            or record.get("summary")
+            or record.get("next_action")
+            or ""
+        )
+        detail = f": {reason_text}" if reason_text else ""
         with (self.data_dir / "CHANGELOG.md").open("a", encoding="utf-8") as changelog:
-            changelog.write(f"- {record['timestamp']} — {kind} ({event_id})\n")
+            changelog.write(f"- {record['timestamp']} — {kind}{detail} ({event_id})\n")
 
     def events(self, project_id: str, kind: str | None = None) -> list[dict[str, Any]]:
         query = (

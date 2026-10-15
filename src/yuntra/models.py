@@ -120,6 +120,7 @@ class Checkpoint(BaseModel):
     project_id: str
     lifecycle_state: LifecycleState
     active_task: str | None = None
+    reason: str | None = None
     completed_work: list[str] = Field(default_factory=list)
     incomplete_work: list[str] = Field(default_factory=list)
     pending_tests: list[str] = Field(default_factory=list)
