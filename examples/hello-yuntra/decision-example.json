@@ -1,8 +1,0 @@
-{
-  "decision_id": "example-local-documents",
-  "problem": "How should a minimal public example demonstrate traceability?",
-  "chosen_approach": "Use Markdown for the plan and JSON for decision and verification evidence.",
-  "rationale": "The example remains readable without external dependencies.",
-  "evidence": ["Example files are inspected locally."],
-  "confidence": "high"
-}
