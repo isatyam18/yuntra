@@ -18,6 +18,12 @@ from .adapters.codex import CodexAdapter
 from .control.learning import LearningRegistry
 from .core.governance import PolicyViolation, require_policy
 from .dashboard import render_dashboard
+from .diagram import (
+    ARCHIFY_REPO,
+    archify_health,
+    generate_diagram,
+    list_diagrams,
+)
 from .memory.context import benchmark_context, build_context
 from .models import (
     DecisionRecord,
@@ -47,12 +53,16 @@ antigravity_app = typer.Typer(
     help="Use the verified Google Antigravity CLI integration."
 )
 skills_app = typer.Typer(help="Inspect the local skill registry.")
+diagram_app = typer.Typer(
+    help="Generate and inspect interactive architecture diagrams via Archify."
+)
 app.add_typer(project_app, name="project")
 app.add_typer(plan_app, name="plan")
 app.add_typer(context_app, name="context")
 app.add_typer(checkpoint_app, name="checkpoint")
 app.add_typer(adapter_app, name="adapter")
 app.add_typer(skills_app, name="skills")
+app.add_typer(diagram_app, name="diagram")
 adapter_app.add_typer(codex_app, name="codex")
 adapter_app.add_typer(claude_app, name="claude-code")
 adapter_app.add_typer(antigravity_app, name="antigravity")
@@ -703,6 +713,93 @@ def export(
         raise typer.BadParameter("No events are available to export.")
     shutil.copyfile(source, destination)
     typer.echo(destination.resolve())
+
+
+@diagram_app.command("health")
+def diagram_health() -> None:
+    """Check Archify availability and installation health."""
+    status = archify_health()
+    if status.get("healthy"):
+        typer.echo(f"Archify is healthy and available: {status.get('executable')}")
+        typer.echo(f"Reference: {ARCHIFY_REPO}")
+    else:
+        typer.echo(
+            f"Archify check failed: {status.get('reason') or status.get('error')}"
+        )
+        typer.echo("To install: npx skills add tt-a1i/archify -g")
+        typer.echo(f"Reference: {ARCHIFY_REPO}")
+        raise typer.Exit(1)
+
+
+@diagram_app.command("list")
+def diagram_list(project: str) -> None:
+    """List interactive architecture diagrams in the project repository."""
+    data = data_path(project)
+    service = ProjectService(home())
+    profile = service.store(data).profile(service._project_id(data))
+    diagrams = list_diagrams(Path(profile.repository_path))
+    if not diagrams:
+        typer.echo("No diagrams found in .archify directory.")
+        return
+    for item in diagrams:
+        typer.echo(f"- {item['title']} ({item['type']}): {item['relative_path']}")
+
+
+@diagram_app.command("generate")
+def diagram_generate(
+    project: str,
+    name: str = typer.Option("web-request-cache-miss", help="Diagram slug name"),
+    title: str = typer.Option(
+        "Web Request: Cache Miss and Database Fallback", help="Diagram title"
+    ),
+    diagram_type: str = typer.Option(
+        "sequence", help="Diagram type (sequence, architecture, etc.)"
+    ),
+) -> None:
+    """Generate an interactive architecture diagram via Archify."""
+    data = data_path(project)
+    service = ProjectService(home())
+    profile = service.store(data).profile(service._project_id(data))
+    repo_path = Path(profile.repository_path)
+    try:
+        result = generate_diagram(
+            repo_path=repo_path,
+            name=name,
+            title=title,
+            diagram_type=diagram_type,
+        )
+        typer.echo(f"Created diagram: {result['title']}")
+        typer.echo(f"File: {result['output_html']}")
+        typer.echo(f"Generated via Archify: {ARCHIFY_REPO}")
+    except (RuntimeError, ValueError, OSError) as exc:
+        typer.echo(f"Diagram generation failed: {exc}", err=True)
+        raise typer.Exit(1)
+
+
+@diagram_app.command("show")
+def diagram_show(
+    project: str,
+    name: str = typer.Option("web-request-cache-miss", help="Diagram slug name"),
+) -> None:
+    """Display the path and URL to view the generated architecture diagram."""
+    data = data_path(project)
+    service = ProjectService(home())
+    profile = service.store(data).profile(service._project_id(data))
+    repo_path = Path(profile.repository_path)
+    clean_name = name.strip().lower().replace(" ", "-")
+    html_file = repo_path / ".archify" / clean_name / f"{clean_name}.html"
+    if not html_file.exists():
+        matches = list((repo_path / ".archify").rglob(f"*{clean_name}*.html"))
+        if matches:
+            html_file = matches[0]
+        else:
+            typer.echo(
+                f"Diagram '{name}' not found under .archify in repository.", err=True
+            )
+            raise typer.Exit(1)
+    file_uri = html_file.resolve().as_uri()
+    typer.echo(f"Path: {html_file.resolve()}")
+    typer.echo(f"Browser URL: {file_uri}")
 
 
 if __name__ == "__main__":

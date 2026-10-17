@@ -9,6 +9,12 @@ from yuntra.adapters.codex import CodexAdapter
 from yuntra.control.learning import LearningRegistry
 from yuntra.core.governance import PolicyViolation, require_policy
 from yuntra.dashboard import render_dashboard
+from yuntra.diagram import (
+    ARCHIFY_REPO,
+    archify_health,
+    build_cache_aside_spec,
+    list_diagrams,
+)
 from yuntra.memory.context import benchmark_context, build_context
 from yuntra.models import LearningScope, LearningStatus, LifecycleState
 from yuntra.security import redact_payload
@@ -368,3 +374,49 @@ def test_plan_approval_records_revision_snapshot(project):
     revisions = list((data / "revisions").glob("spec-*.md"))
     assert len(revisions) == 1
     assert "User supplied content." in revisions[0].read_text(encoding="utf-8")
+
+
+def test_archify_health_structure():
+    status = archify_health()
+    assert "healthy" in status
+    assert status["repo"] == ARCHIFY_REPO
+
+
+def test_build_cache_aside_spec():
+    spec = build_cache_aside_spec(".archify/test/test.html", "Test Sequence")
+    assert spec["schema_version"] == 1
+    assert spec["diagram_type"] == "sequence"
+    assert spec["meta"]["title"] == "Test Sequence"
+    participant_ids = [p["id"] for p in spec["participants"]]
+    assert "browser" in participant_ids
+    assert "api" in participant_ids
+    assert "redis" in participant_ids
+    assert "postgres" in participant_ids
+    message_ids = [m["id"] for m in spec["messages"]]
+    assert "http-request" in message_ids
+    assert "cache-miss" in message_ids
+
+
+def test_list_diagrams(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assert list_diagrams(repo) == []
+
+    diagram_dir = repo / ".archify" / "test-diagram"
+    diagram_dir.mkdir(parents=True)
+    html_file = diagram_dir / "test-diagram.html"
+    html_file.write_text(
+        "<html><body>Interactive diagram</body></html>", encoding="utf-8"
+    )
+
+    candidate = diagram_dir / "candidate.json"
+    candidate.write_text(
+        '{"meta": {"title": "Sample Diagram"}, "diagram_type": "sequence"}',
+        encoding="utf-8",
+    )
+
+    diagrams = list_diagrams(repo)
+    assert len(diagrams) == 1
+    assert diagrams[0]["title"] == "Sample Diagram"
+    assert diagrams[0]["type"] == "sequence"
+    assert "test-diagram.html" in diagrams[0]["relative_path"]

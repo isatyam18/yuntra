@@ -18,8 +18,9 @@ yuntra is an installable Python CLI for Windows and PowerShell. It runs without 
 | 5 | Evidence-backed, scoped learning capture and explicit promotion gates | Complete |
 | 6 | Backup/restore safety, schema versioning, policy checks, recovery hardening, and security coverage | Complete |
 | 7 | Dependency-free static project dashboard | Complete |
+| 8 | Interactive architecture and sequence diagramming via Archify | Complete |
 
-The complete local quality gate currently covers 27 automated tests, Ruff linting, Black formatting, Mypy type checks, compilation, and source/wheel builds.
+The complete local quality gate currently covers 32 automated tests, Ruff linting, Black formatting, Mypy type checks, compilation, and source/wheel builds.
 
 yuntra is prepared for a public beta, running locally on Windows and Linux without cloud accounts or external dependencies.
 
@@ -141,6 +142,26 @@ yuntra dashboard inventory-api --output C:\reports\inventory-api.html
 
 Restore only writes into a new destination and rejects unsafe archive paths. Checkpoints preserve direct Git evidence and report drift without resetting or discarding changes. The dashboard is a self-contained, read-only HTML snapshot; it starts no server and collects no telemetry.
 
+## Architecture and sequence diagrams (Archify)
+
+yuntra integrates with [Archify](https://github.com/tt-a1i/archify) to generate interactive, self-contained architecture and sequence diagrams directly from project workflows and specifications.
+
+```powershell
+# Verify Archify installation and health
+yuntra diagram health
+
+# Generate an interactive cache-aside sequence diagram
+yuntra diagram generate inventory-api --name "web-request-cache-miss" --title "Web Request: Cache Miss and Database Fallback"
+
+# List generated diagrams in the repository
+yuntra diagram list inventory-api
+
+# Show local path and browser URL to view the diagram
+yuntra diagram show inventory-api --name "web-request-cache-miss"
+```
+
+Generated diagrams are stored under `.archify/` in the project repository as self-contained HTML visual traces featuring trace step playback, component inspection cards, and light/dark theme toggles.
+
 ## Safety boundaries and limitations
 
 - yuntra never auto-commits or pushes. These defaults are disabled in every project profile.
@@ -159,6 +180,7 @@ yuntra adapter doctor
 yuntra doctor
 yuntra context show inventory-api
 yuntra skills list inventory-api
+yuntra diagram --help
 ```
 
 For security policy and vulnerability reporting, see [SECURITY.md](SECURITY.md).
