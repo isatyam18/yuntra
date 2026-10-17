@@ -183,4 +183,11 @@ yuntra skills list inventory-api
 yuntra diagram --help
 ```
 
+## Feedback and Issues
+
+If you encounter a bug or have a suggestion, please file an issue on GitHub:
+- [Report a Bug](https://github.com/isatyam18/yuntra/issues/new?template=bug_report.md)
+- [Request a Feature](https://github.com/isatyam18/yuntra/issues/new?template=feature_request.md)
+
 For security policy and vulnerability reporting, see [SECURITY.md](SECURITY.md).
+

@@ -1,22 +1,36 @@
 # Security Policy
 
-## Supported versions
+## Supported Versions
 
-Security fixes are provided for the latest public beta release on the default branch.
+| Version | Supported |
+| :--- | :--- |
+| **0.2.x** | :white_check_mark: (Current release) |
+| < 0.2.0 | :x: |
 
-## Reporting a vulnerability
+## Reporting a Vulnerability
 
-Do **not** disclose suspected vulnerabilities, credentials, or proof-of-concept exploit details in public issues or discussions.
+Do **not** disclose suspected vulnerabilities, credentials, or proof-of-concept exploits in public issues or discussions.
 
-Use GitHub's private vulnerability reporting feature when it is enabled for the repository. Until the maintainer configures a private reporting channel, contact the repository maintainer privately through the account that owns the repository and include:
+Please report security concerns privately through GitHub:
+- **Direct Link:** [Open a Private Vulnerability Report](https://github.com/isatyam18/yuntra/security/advisories/new)
 
-- A concise description and impact assessment.
-- Reproduction steps or a minimal proof of concept.
-- Affected version, operating system, and configuration.
-- Whether the report includes sensitive material.
+When submitting a report, please include:
+- A concise description of the issue and potential impact.
+- Step-by-step reproduction instructions or a minimal proof of concept.
+- Affected Yuntra version, operating system, shell, and Python environment.
+- Any logs or redacted CLI output.
 
-The project aims to acknowledge reports promptly, validate them privately, prepare a fix and regression test where appropriate, and coordinate disclosure after a fix is available.
+We aim to acknowledge reports within 48 hours, validate them privately, prepare a regression-tested patch, and coordinate public disclosure after the release of a fix.
 
-## Scope and boundaries
+## Security Architecture and Boundaries
 
-Yuntra handles local project metadata and can launch explicitly approved local commands. It cannot guarantee interception of every operation performed by an external coding tool. Never store credentials in project specifications, prompts, handoffs, or verification commands.
+### Built-in Guarantees
+* **Credential Redaction:** Operates locally to redact common token formats, secret keys, and passwords before logging events or generating adapter handoffs.
+* **Plan Gatekeeping:** `yuntra plan review` automatically blocks approval for plans containing likely secrets.
+* **Deny-by-Default Policies:** High-risk operations (including `git_push`, auto-commit, network requests, and package installations) are blocked unless explicitly configured in project policies.
+* **Safe Recovery:** `yuntra restore` enforces path-traversal safeguards (Zip Slip protection) and rejects overwriting existing directories.
+
+### Limitations
+* Yuntra executes local commands explicitly approved by the local user.
+* It cannot guarantee interception of operations performed independently by external coding agents.
+* Never place production API tokens, private keys, or passwords in project specifications, prompts, handoffs, or verification commands.

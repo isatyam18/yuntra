@@ -1,8 +1,8 @@
 ---
 name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+about: Create a report to help us improve Yuntra
+title: '[BUG] '
+labels: 'bug'
 assignees: ''
 
 ---
@@ -12,27 +12,24 @@ A clear and concise description of what the bug is.
 
 **To Reproduce**
 Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. Run command 'yuntra ...'
+2. With arguments '....'
+3. See error or output
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**CLI Output / Traceback**
+```powershell
+# Paste terminal output, error logs, or tracebacks here
+```
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
-
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Environment:**
+ - OS: [e.g. Windows 11, Ubuntu 22.04, macOS]
+ - Shell / Terminal: [e.g. PowerShell 7, Windows Terminal, bash, zsh]
+ - Python version: [e.g. 3.12.3]
+ - Yuntra version: [e.g. 0.2.0, run `yuntra --help`]
+ - Adapter (if applicable): [e.g. Codex, Claude Code, Antigravity, Archify]
 
 **Additional context**
-Add any other context about the problem here.
+Add any other context or details about the problem here.
