@@ -10,8 +10,14 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, ClassVar
 
-from ..models import LifecycleState
-from ..service import ProjectService, git_status, redact
+from ..models import LifecycleState, ProjectProfile
+from ..service import (
+    ProjectService,
+    check_spec_drift,
+    get_approved_spec,
+    git_status,
+    redact,
+)
 
 
 class AdapterError(RuntimeError):
@@ -113,14 +119,27 @@ class BaseCliAdapter(CodingAdapter):
         service = ProjectService(project_data.parent.parent)
         store = service.store(project_data)
         profile = store.profile(service._project_id(project_data))
-        spec = (project_data / "PROJECT_SPEC.md").read_text(encoding="utf-8")
+        spec = get_approved_spec(project_data)
         return f"""# Yuntra project handoff (canonical state)
 
 Project: {profile.name} ({profile.project_id})
 Lifecycle state: {profile.state}
 Repository: {profile.repository_path}
 
-Follow the approved specification below. Do not commit, push, publish, install dependencies, access credentials, or perform destructive operations unless the user explicitly authorizes it outside this handoff. Report decisions and verification commands; Yuntra will only treat direct repository and command evidence as verified.
+Follow the approved specification below. Do not commit, push, publish, install dependencies, access credentials, or perform destructive operations unless the user explicitly authorizes it outside this handoff.
+
+## Architectural and Reason Requirements
+For every step, file, or function you plan or implement:
+1. State the explicit problem and rationale BEFORE implementing each step or function.
+2. In all code you create or modify, include clean docstrings/comments stating the design purpose and rationale for the component/function.
+3. If an architectural decision or tradeoff is made, format it clearly as:
+   Decision: <short title>
+   Problem: <problem being solved>
+   Chosen: <chosen solution>
+   Rationale: <why this approach was chosen>
+   Tradeoffs: <known alternatives or tradeoffs>
+
+Report decisions and verification commands; Yuntra will only treat direct repository and command evidence as verified.
 
 ## Approved project specification
 
@@ -129,7 +148,12 @@ Follow the approved specification below. Do not commit, push, publish, install d
 
     @abstractmethod
     def _build_command(
-        self, executable: str, repo_path: str, handoff: Path, prompt: str
+        self,
+        executable: str,
+        repo_path: str,
+        handoff: Path,
+        prompt: str,
+        profile: ProjectProfile | None = None,
     ) -> tuple[list[str], str | None]: ...
 
     def run_task(self, project_data: Path, prompt: str) -> dict[str, Any]:
@@ -141,6 +165,30 @@ Follow the approved specification below. Do not commit, push, publish, install d
         service = ProjectService(project_data.parent.parent)
         store = service.store(project_data)
         profile = store.profile(service._project_id(project_data))
+
+        # Check spec drift before launching task
+        has_drifted, approved_h, live_h = check_spec_drift(project_data)
+        if has_drifted:
+            service.transition(
+                project_data,
+                LifecycleState.REVIEW,
+                "Specification drift detected: live specification was modified after approval",
+                actor="yuntra-integrity",
+            )
+            store.event(
+                uuid.uuid4().hex,
+                profile.project_id,
+                "SPEC_DRIFT_DETECTED",
+                {
+                    "approved_hash": approved_h,
+                    "live_hash": live_h,
+                    "action": "reverted_to_review",
+                },
+            )
+            raise AdapterError(
+                "Specification has been modified after approval. Review and approve the updated specification before launching tasks."
+            )
+
         if profile.state == LifecycleState.APPROVED:
             service.transition(
                 project_data,
@@ -158,7 +206,7 @@ Follow the approved specification below. Do not commit, push, publish, install d
         handoff.write_text(instructions, encoding="utf-8")
         before = git_status(Path(profile.repository_path))
         command, cwd = self._build_command(
-            executable, profile.repository_path, handoff, prompt
+            executable, profile.repository_path, handoff, prompt, profile
         )
         result = self._run(
             command,
@@ -214,17 +262,38 @@ Follow the approved specification below. Do not commit, push, publish, install d
         try:
             data = json.loads(output.strip())
             if isinstance(data, dict):
-                for key in ("summary", "reason", "message", "explanation", "result"):
+                for key in (
+                    "summary",
+                    "reason",
+                    "message",
+                    "explanation",
+                    "result",
+                    "rationale",
+                ):
                     val = data.get(key)
                     if isinstance(val, str) and val.strip():
                         return val.strip()
         except (json.JSONDecodeError, ValueError, TypeError):
-            data = None
+            pass
+
         lines = [line.strip() for line in output.splitlines() if line.strip()]
         for line in lines:
             match = re.match(
-                r"(?i)^(reason|summary|rationale|explanation)\s*[:=-]\s*(.+)", line
+                r"(?i)^(?:reason|summary|rationale|explanation|decision)\s*[:=-]\s*(.+)",
+                line,
             )
             if match:
-                return match.group(2).strip()
+                extracted = match.group(1).strip()
+                if extracted and len(extracted) > 3:
+                    return extracted
+
+        embedded_match = re.search(
+            r"(?i)(?:rationale|reason|decision|summary)\s*[:=-]\s*([^\n\r]+)",
+            output,
+        )
+        if embedded_match:
+            candidate = embedded_match.group(1).strip()
+            if candidate and len(candidate) > 3:
+                return candidate
+
         return lines[-1][:200] if lines else None

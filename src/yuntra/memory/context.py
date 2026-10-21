@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 import hashlib
+import os
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -8,8 +7,29 @@ from pathlib import Path
 
 from ..service import ProjectService
 
-SENSITIVE_NAMES = {".env", ".env.local", "id_rsa", "id_ed25519"}
+SENSITIVE_NAMES = {
+    ".env",
+    ".env.local",
+    ".npmrc",
+    "credentials.json",
+    "id_rsa",
+    "id_ed25519",
+}
 SENSITIVE_SUFFIXES = {".pem", ".key", ".pfx", ".p12"}
+DEFAULT_EXCLUDED_DIRS = {
+    ".git",
+    ".env",
+    "node_modules",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    "__pycache__",
+    ".archify",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+}
 TEXT_SUFFIXES = {
     ".md",
     ".txt",
@@ -67,9 +87,10 @@ def _kind(path: Path) -> str:
 
 
 def _excluded(path: Path, repository: Path, excluded_dirs: set[str]) -> bool:
+    name_lower = path.name.lower()
     if (
-        path.name.lower() in SENSITIVE_NAMES
-        or path.name.lower().startswith(".env")
+        name_lower in SENSITIVE_NAMES
+        or name_lower.startswith((".env", "secrets."))
         or path.suffix.lower() in SENSITIVE_SUFFIXES
     ):
         return True
@@ -86,38 +107,48 @@ def repository_candidates(
 ) -> tuple[list[Candidate], list[str]]:
     candidates: list[Candidate] = []
     omitted: list[str] = []
-    excluded = set(excluded_dirs)
-    for path in sorted(repository.rglob("*")):
-        if not path.is_file():
-            continue
-        relative = path.relative_to(repository).as_posix()
-        if _excluded(path, repository, excluded):
-            omitted.append(f"{relative}: excluded by security/profile rule")
-            continue
-        if path.suffix.lower() not in TEXT_SUFFIXES:
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            omitted.append(f"{relative}: unreadable text")
-            continue
-        if len(content) > 200_000:
-            omitted.append(f"{relative}: exceeds 200KB retrieval limit")
-            continue
-        haystack = f"{relative}\n{content}".lower()
-        score = sum(1 for term in terms if term in haystack)
-        if terms and score == 0:
-            continue
-        sections = (
-            markdown_sections(content)
-            if path.suffix.lower() in {".md", ".rst"}
-            else [("file", content)]
-        )
-        for section, body in sections:
-            section_score = score + sum(1 for term in terms if term in section.lower())
-            candidates.append(
-                Candidate(relative, section, body, _kind(path), section_score)
+    excluded = set(excluded_dirs) | DEFAULT_EXCLUDED_DIRS
+
+    for root, dirs, files in os.walk(repository):
+        # Prune excluded directories in-place during directory traversal
+        dirs[:] = [
+            d
+            for d in sorted(dirs)
+            if d not in excluded and not d.startswith(".env")
+        ]
+
+        for filename in sorted(files):
+            path = Path(root) / filename
+            relative = path.relative_to(repository).as_posix()
+            if _excluded(path, repository, excluded):
+                omitted.append(f"{relative}: excluded by security/profile rule")
+                continue
+            if path.suffix.lower() not in TEXT_SUFFIXES:
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                omitted.append(f"{relative}: unreadable text")
+                continue
+            if len(content) > 200_000:
+                omitted.append(f"{relative}: exceeds 200KB retrieval limit")
+                continue
+            haystack = f"{relative}\n{content}".lower()
+            score = sum(1 for term in terms if term in haystack)
+            if terms and score == 0:
+                continue
+            sections = (
+                markdown_sections(content)
+                if path.suffix.lower() in {".md", ".rst"}
+                else [("file", content)]
             )
+            for section, body in sections:
+                section_score = score + sum(
+                    1 for term in terms if term in section.lower()
+                )
+                candidates.append(
+                    Candidate(relative, section, body, _kind(path), section_score)
+                )
     return candidates, omitted
 
 
@@ -188,7 +219,15 @@ def build_context(project_data: Path, query: str = "") -> dict:
         content = candidate.content
         truncated = False
         if tokens > available:
-            content = content[: available * 4]
+            char_limit = available * 4
+            truncated_lines: list[str] = []
+            curr_len = 0
+            for line in content.splitlines(keepends=True):
+                if curr_len + len(line) > char_limit and truncated_lines:
+                    break
+                truncated_lines.append(line)
+                curr_len += len(line)
+            content = "".join(truncated_lines).rstrip() + "\n... [truncated to fit context budget]"
             tokens = estimate_tokens(content)
             truncated = True
         used[candidate.kind] += tokens

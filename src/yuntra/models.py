@@ -95,6 +95,8 @@ class ProjectProfile(BaseModel):
             "allow_destructive_operations": False,
         }
     )
+    approved_spec_hash: str | None = None
+    approved_spec_revision: str | None = None
     created_at: str = Field(default_factory=utc_now)
 
 

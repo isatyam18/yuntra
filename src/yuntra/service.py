@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import hashlib
 import os
 import shutil
 import subprocess
@@ -30,10 +29,14 @@ REQUIRED_SECTIONS = [
 
 
 def default_home() -> Path:
-    return (
-        Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        / "Yuntra"
-    )
+    if os.name == "nt":
+        return (
+            Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+            / "Yuntra"
+        )
+    xdg_data = os.environ.get("XDG_DATA_HOME")
+    base = Path(xdg_data) if xdg_data else Path.home() / ".local" / "share"
+    return base / "yuntra"
 
 
 def project_dir(home: Path, project_id: str) -> Path:
@@ -147,6 +150,7 @@ class ProjectService:
             )
         # Snapshot specification revision
         spec_text = (data / "PROJECT_SPEC.md").read_text(encoding="utf-8")
+        h = calculate_spec_hash(spec_text)
         revisions_dir = data / "revisions"
         revisions_dir.mkdir(exist_ok=True)
         rev_path = revisions_dir / f"spec-{utc_now().replace(':', '-')}.md"
@@ -155,6 +159,9 @@ class ProjectService:
         approved = self.transition(
             data, LifecycleState.APPROVED, "Plan explicitly approved", actor
         )
+        approved.approved_spec_hash = h
+        approved.approved_spec_revision = str(rev_path.relative_to(data))
+        self.store(data).save_profile(approved)
         self.store(data).event(
             uuid.uuid4().hex,
             approved.project_id,
@@ -164,6 +171,7 @@ class ProjectService:
                 "approval": "plan",
                 "reason": "Plan explicitly approved",
                 "revision": str(rev_path),
+                "spec_hash": h,
             },
         )
         return approved
@@ -297,3 +305,38 @@ def restore_backup(archive: Path, destination: Path) -> None:
                 raise ValueError("Archive contains an unsafe path.")
         destination.mkdir(parents=True)
         bundle.extractall(destination)
+
+
+def calculate_spec_hash(text: str) -> str:
+    """Calculate SHA-256 hash of a specification text."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def check_spec_drift(data: Path) -> tuple[bool, str | None, str | None]:
+    """Check if the live PROJECT_SPEC.md differs from the approved specification.
+
+    Returns:
+        (has_drifted, approved_hash, live_hash)
+    """
+    service = ProjectService(data.parent.parent)
+    store = service.store(data)
+    profile = store.profile(service._project_id(data))
+    if not profile.approved_spec_hash:
+        return False, None, None
+    spec_path = data / "PROJECT_SPEC.md"
+    if not spec_path.exists():
+        return True, profile.approved_spec_hash, None
+    live_hash = calculate_spec_hash(spec_path.read_text(encoding="utf-8"))
+    return live_hash != profile.approved_spec_hash, profile.approved_spec_hash, live_hash
+
+
+def get_approved_spec(data: Path) -> str:
+    """Return the approved specification content from revisions, falling back to PROJECT_SPEC.md."""
+    service = ProjectService(data.parent.parent)
+    store = service.store(data)
+    profile = store.profile(service._project_id(data))
+    if profile.approved_spec_revision:
+        rev_file = data / profile.approved_spec_revision
+        if rev_file.exists():
+            return rev_file.read_text(encoding="utf-8")
+    return (data / "PROJECT_SPEC.md").read_text(encoding="utf-8")

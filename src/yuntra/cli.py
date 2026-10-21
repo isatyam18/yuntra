@@ -355,6 +355,12 @@ def verify(
     command: str = typer.Option(
         ..., help="Verification command; passed to the system shell."
     ),
+    timeout: int = typer.Option(
+        300, help="Maximum execution time in seconds before terminating command."
+    ),
+    complete: bool = typer.Option(
+        False, help="Transition project lifecycle to COMPLETED if verification passes."
+    ),
 ) -> None:
     """Run a user-specified verification command and record its actual result."""
     data = data_path(project)
@@ -367,24 +373,51 @@ def verify(
         LifecycleState.VERIFYING,
     }:
         raise typer.BadParameter("Verification requires an approved plan.")
-    result = subprocess.run(
-        command,
-        cwd=profile.repository_path,
-        shell=True,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+
+    if profile.state in {LifecycleState.APPROVED, LifecycleState.EXECUTING}:
+        profile = service.transition(
+            data,
+            LifecycleState.VERIFYING,
+            "Verification initiated",
+            actor="user",
+        )
+
+    try:
+        result = subprocess.run(
+            command,
+            cwd=profile.repository_path,
+            shell=True,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout,
+        )
+        returncode = result.returncode
+        raw_output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired as exc:
+        returncode = -1
+        out = (
+            (exc.stdout or b"").decode("utf-8", errors="replace")
+            if isinstance(exc.stdout, bytes)
+            else (exc.stdout or "")
+        )
+        err = (
+            (exc.stderr or b"").decode("utf-8", errors="replace")
+            if isinstance(exc.stderr, bytes)
+            else (exc.stderr or "")
+        )
+        raw_output = f"Verification command timed out after {timeout} seconds.\n{out}\n{err}"
+
     status_value = (
-        VerificationStatus.PASS if result.returncode == 0 else VerificationStatus.FAIL
+        VerificationStatus.PASS if returncode == 0 else VerificationStatus.FAIL
     )
     record = {
         "verification_id": uuid.uuid4().hex,
         "project_id": profile.project_id,
         "command": redact(command),
-        "exit_code": result.returncode,
+        "exit_code": returncode,
         "result": status_value,
-        "output": redact((result.stdout + result.stderr)[-8000:]),
+        "output": redact(raw_output[-8000:]),
         "created_at": utc_now(),
     }
     store.verification(record)
@@ -394,8 +427,17 @@ def verify(
         "VERIFICATION",
         {"verification_id": record["verification_id"], "result": status_value},
     )
+
+    if complete and status_value == VerificationStatus.PASS:
+        service.transition(
+            data,
+            LifecycleState.COMPLETED,
+            "Verification passed with --complete",
+            actor="user",
+        )
+
     typer.echo(json.dumps(record, indent=2))
-    raise typer.Exit(0 if result.returncode == 0 else 1)
+    raise typer.Exit(0 if returncode == 0 else 1)
 
 
 def _export_instructions(adapter, project: str, output: Path | None) -> None:

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from yuntra.adapters.antigravity import AntigravityAdapter
+from yuntra.adapters.base import AdapterError
 from yuntra.adapters.claude_code import ClaudeCodeAdapter
 from yuntra.adapters.codex import CodexAdapter
 from yuntra.control.learning import LearningRegistry
@@ -18,7 +19,14 @@ from yuntra.diagram import (
 from yuntra.memory.context import benchmark_context, build_context
 from yuntra.models import LearningScope, LearningStatus, LifecycleState
 from yuntra.security import redact_payload
-from yuntra.service import ProjectService, backup, redact, restore_backup
+from yuntra.service import (
+    ProjectService,
+    backup,
+    check_spec_drift,
+    get_approved_spec,
+    redact,
+    restore_backup,
+)
 from yuntra.store import Store
 
 
@@ -420,3 +428,85 @@ def test_list_diagrams(tmp_path: Path):
     assert diagrams[0]["title"] == "Sample Diagram"
     assert diagrams[0]["type"] == "sequence"
     assert "test-diagram.html" in diagrams[0]["relative_path"]
+
+
+def test_spec_drift_detection_and_handoff_isolation(project, monkeypatch):
+    service, data, _ = project
+    complete_spec(data)
+    service.review(data)
+    approved_profile = service.approve(data, "user")
+    assert approved_profile.approved_spec_hash is not None
+    assert approved_profile.approved_spec_revision is not None
+
+    # Verify no drift initially
+    drifted, app_h, live_h = check_spec_drift(data)
+    assert not drifted
+    assert app_h == live_h
+
+    # Modify live spec post-approval
+    spec_path = data / "PROJECT_SPEC.md"
+    original_spec = spec_path.read_text(encoding="utf-8")
+    spec_path.write_text(original_spec + "\n<!-- Unapproved post-approval modification -->", encoding="utf-8")
+
+    # Drift must now be detected
+    drifted, app_h, live_h = check_spec_drift(data)
+    assert drifted
+    assert app_h != live_h
+
+    # Handoff export and get_approved_spec MUST use the approved snapshot, not the drifted live file
+    adapter = CodexAdapter()
+    handoff_text = adapter.export_project_instructions(data)
+    assert "Unapproved post-approval modification" not in handoff_text
+    assert "User supplied content." in handoff_text
+    assert "Unapproved post-approval modification" not in get_approved_spec(data)
+    assert "User supplied content." in get_approved_spec(data)
+
+    # Mock CLI availability and check that run_task blocks execution and reverts state to REVIEW
+    monkeypatch.setattr("shutil.which", lambda _: "/mock/codex")
+    with pytest.raises(AdapterError, match="Specification has been modified after approval"):
+        adapter.run_task(data, "Do work")
+
+    # State should have reverted to REVIEW
+    current_profile = service.store(data).profile(approved_profile.project_id)
+    assert current_profile.state == LifecycleState.REVIEW
+
+
+def test_adapter_policy_enforcement(project):
+    _service, data, profile = project
+
+    claude = ClaudeCodeAdapter()
+    # Default policies: allow_destructive_operations and allow_dependency_install are False
+    cmd_default, _ = claude._build_command("claude", profile.repository_path, data / "handoff.md", "task", profile)
+    allowed_idx = cmd_default.index("--allowedTools")
+    assert cmd_default[allowed_idx + 1] == "Read,Edit"
+    assert "Bash" not in cmd_default[allowed_idx + 1]
+
+    # Enabled policies: allow_destructive_operations=True
+    profile.policies["allow_destructive_operations"] = True
+    cmd_enabled, _ = claude._build_command("claude", profile.repository_path, data / "handoff.md", "task", profile)
+    allowed_idx2 = cmd_enabled.index("--allowedTools")
+    assert "Bash" in cmd_enabled[allowed_idx2 + 1]
+
+    agy = AntigravityAdapter()
+    # Without policy: no --dangerously-skip-permissions
+    profile.policies["allow_destructive_operations"] = False
+    cmd_agy, _ = agy._build_command("agy", profile.repository_path, data / "handoff.md", "task", profile)
+    assert "--dangerously-skip-permissions" not in cmd_agy
+
+    # With policy: --dangerously-skip-permissions present
+    profile.policies["allow_destructive_operations"] = True
+    cmd_agy_optin, _ = agy._build_command("agy", profile.repository_path, data / "handoff.md", "task", profile)
+    assert "--dangerously-skip-permissions" in cmd_agy_optin
+
+
+def test_restore_backup_rejects_path_traversal(tmp_path: Path):
+    import zipfile
+
+    # Create malicious archive with path traversal (Zip Slip)
+    archive_path = tmp_path / "malicious.zip"
+    with zipfile.ZipFile(archive_path, "w") as zf:
+        zf.writestr("../evil.txt", "exploit")
+
+    target_dir = tmp_path / "restored"
+    with pytest.raises(ValueError, match="Archive contains an unsafe path."):
+        restore_backup(archive_path, target_dir)

@@ -14,12 +14,14 @@ _TRANSITIONS = {
         LifecycleState.CANCELLED,
     },
     LifecycleState.APPROVED: {
+        LifecycleState.REVIEW,
         LifecycleState.EXECUTING,
         LifecycleState.VERIFYING,
         LifecycleState.PAUSED,
         LifecycleState.CANCELLED,
     },
     LifecycleState.EXECUTING: {
+        LifecycleState.REVIEW,
         LifecycleState.VERIFYING,
         LifecycleState.PAUSED,
         LifecycleState.BLOCKED,

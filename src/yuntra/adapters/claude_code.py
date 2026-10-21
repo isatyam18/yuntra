@@ -3,9 +3,12 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from .base import BaseCliAdapter
+
+if TYPE_CHECKING:
+    from ..models import ProjectProfile
 
 __all__ = ["ClaudeCodeAdapter", "shutil", "subprocess"]
 
@@ -29,8 +32,20 @@ class ClaudeCodeAdapter(BaseCliAdapter):
     ]
 
     def _build_command(
-        self, executable: str, repo_path: str, handoff: Path, prompt: str
+        self,
+        executable: str,
+        repo_path: str,
+        handoff: Path,
+        prompt: str,
+        profile: ProjectProfile | None = None,
     ) -> tuple[list[str], str | None]:
+        tools = ["Read", "Edit"]
+        if profile and (
+            profile.policies.get("allow_destructive_operations", False)
+            or profile.policies.get("allow_dependency_install", False)
+        ):
+            tools.append("Bash")
+
         return (
             [
                 executable,
@@ -39,7 +54,7 @@ class ClaudeCodeAdapter(BaseCliAdapter):
                 "--output-format",
                 "json",
                 "--allowedTools",
-                "Read,Edit,Bash",
+                ",".join(tools),
             ],
             repo_path,
         )
